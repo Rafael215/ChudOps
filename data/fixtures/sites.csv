@@ -1,0 +1,4 @@
+site_id,name,latitude,longitude,capacity_kw,installation_type,vs30
+zen-la-001,Van Nuys Rooftop Cluster,34.191,-118.451,4200,rooftop,245
+zen-la-002,Burbank Commercial Array,34.181,-118.308,8600,rooftop,310
+zen-la-003,Lancaster Ground Mount,34.686,-118.154,18400,ground_mount,590

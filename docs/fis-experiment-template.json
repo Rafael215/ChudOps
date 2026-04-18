@@ -1,0 +1,32 @@
+{
+  "description": "SeismicSentry hackathon chaos template placeholder",
+  "targets": {
+    "ApiLambda": {
+      "resourceType": "aws:lambda:function",
+      "resourceArns": ["REPLACE_WITH_SCENARIO_ORCHESTRATOR_FUNCTION_ARN"],
+      "selectionMode": "ALL"
+    }
+  },
+  "actions": {
+    "ThrottleLambdaConcurrency": {
+      "actionId": "aws:lambda:invocation-pause",
+      "description": "Simulate primary API degradation during earthquake response",
+      "parameters": {
+        "duration": "PT2M"
+      },
+      "targets": {
+        "Functions": "ApiLambda"
+      }
+    }
+  },
+  "stopConditions": [
+    {
+      "source": "none"
+    }
+  ],
+  "roleArn": "REPLACE_WITH_FIS_ROLE_ARN",
+  "tags": {
+    "Project": "SeismicSentry",
+    "Purpose": "Hackathon resilience demo"
+  }
+}

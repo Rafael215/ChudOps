@@ -1,0 +1,3 @@
+scenario_id,name,magnitude,epicenter_latitude,epicenter_longitude,source,description
+northridge-2,Northridge 2.0,6.9,34.213,-118.537,Scripps SIO physics-based simulation placeholder,San Fernando Valley rupture with basin amplification across LA County.
+san-andreas-south,San Andreas South,7.8,34.05,-117.24,Scripps SIO physics-based simulation placeholder,High-impact southern San Andreas event affecting Inland Empire solar corridors.

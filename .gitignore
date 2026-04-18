@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+.vite/
+.env
+.env.local
+cdk.out/
+*.tsbuildinfo
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+model.tar.gz
+*.egg-info/

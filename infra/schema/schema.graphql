@@ -1,0 +1,54 @@
+type SiteInferenceResult {
+  siteId: ID!
+  probabilityOfFailure: Float!
+  riskBand: String!
+  pgvCmS: Float!
+  expectedCapacityLostKw: Float!
+}
+
+type ScenarioRunResult {
+  scenarioId: ID!
+  generatedAt: AWSDateTime!
+  totalSites: Int!
+  redSites: Int!
+  yellowSites: Int!
+  greenSites: Int!
+  totalCapacityKw: Float!
+  expectedCapacityLostKw: Float!
+  inferenceLatencyMs: Int!
+  results: [SiteInferenceResult!]!
+}
+
+input SiteInferenceResultInput {
+  siteId: ID!
+  probabilityOfFailure: Float!
+  riskBand: String!
+  pgvCmS: Float!
+  expectedCapacityLostKw: Float!
+}
+
+input ScenarioRunInput {
+  scenarioId: ID!
+  generatedAt: AWSDateTime!
+  totalSites: Int!
+  redSites: Int!
+  yellowSites: Int!
+  greenSites: Int!
+  totalCapacityKw: Float!
+  expectedCapacityLostKw: Float!
+  inferenceLatencyMs: Int!
+  results: [SiteInferenceResultInput!]!
+}
+
+type Query {
+  latestScenarioRun(scenarioId: ID!): ScenarioRunResult
+}
+
+type Mutation {
+  publishScenarioRun(input: ScenarioRunInput!): ScenarioRunResult
+}
+
+type Subscription {
+  onScenarioRun(scenarioId: ID!): ScenarioRunResult
+    @aws_subscribe(mutations: ["publishScenarioRun"])
+}
