@@ -1,0 +1,23 @@
+{
+  "name": "@seismic-sentry/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/orchestrator.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "import:fixtures": "node dist/import-fixtures.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.699.0",
+    "@aws-sdk/client-sagemaker-runtime": "^3.699.0",
+    "@aws-sdk/client-sns": "^3.699.0",
+    "@aws-sdk/lib-dynamodb": "^3.699.0",
+    "@seismic-sentry/shared": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.146",
+    "typescript": "^5.6.3"
+  }
+}

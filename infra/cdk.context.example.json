@@ -1,0 +1,9 @@
+{
+  "environmentName": "dev",
+  "enableSageMaker": "false",
+  "alertEmail": "",
+  "allowedCorsOrigin": "*",
+  "modelArtifactBucket": "",
+  "modelArtifactKey": "models/seismic-sentry/model.tar.gz",
+  "sagemakerContainerImage": ""
+}
