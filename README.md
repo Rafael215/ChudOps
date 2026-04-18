@@ -50,6 +50,40 @@ npm run build
 npm run cdk:synth
 ```
 
+## Grid Architect Marimo Demo
+
+The hackathon prototype also includes a local Marimo notebook app:
+
+```text
+app.py                 Interactive seismic exposure dashboard
+eda.py                 Data loading, cleaning, spatial matching, and metrics
+scripts/prepare_data.py Converts downloaded source files into local app inputs
+```
+
+Run the Marimo demo:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+marimo edit app.py
+```
+
+The app combines:
+
+- Scripps physics-based ground velocity simulation data
+- ZenPower solar installation records
+
+The app reports exposed solar sites, affected capacity, capacity at risk, daily
+energy at risk, and estimated daily energy value at risk. The raw datasets are
+kept local under `data/raw/` and ignored by Git so they are not pushed to
+GitHub.
+
+Prototype caveat: the Scripps LOH file is a local simulation grid, so the
+current demo scales that grid over the ZenPower solar region as a first-pass
+workflow approximation. This is a seismic exposure screening demo, not a final
+physical damage model.
+
 ## AWS Notes
 
 The default CDK stack creates low-cost serverless resources: S3, CloudFront, API Gateway, Lambda, DynamoDB, SNS, AppSync, CloudWatch, and IAM roles.
