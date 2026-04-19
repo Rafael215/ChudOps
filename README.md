@@ -1,8 +1,8 @@
-# Bedrock
+# ChudOps
 
 Resilient grid digital twin for earthquake impact analysis across Southern California solar infrastructure.
 
-Bedrock helps operators answer a high-pressure post-earthquake question: which solar assets are most likely to fail, how much capacity is at risk, and can the emergency dashboard keep running while cloud infrastructure is under stress?
+ChudOps helps operators answer a high-pressure post-earthquake question: which solar assets are most likely to fail, how much capacity is at risk, and can the emergency dashboard keep running while cloud infrastructure is under stress?
 
 The project combines a React operations dashboard, AWS serverless infrastructure, a SageMaker-ready failure model, DynamoDB-backed asset data, and AWS Fault Injection Service chaos experiments.
 
@@ -229,7 +229,7 @@ Useful AWS Console pages:
 
 ## Notes
 
-- The visible dashboard brand is Bedrock.
+- The visible dashboard brand is BedRock.
 - Some AWS resource names still use `SeismicSentry-dev` to avoid replacing stable demo infrastructure.
 - The Mapbox public token should be restricted by URL in the Mapbox dashboard before final presentation.
 - Synthetic ML labels are generated from HAZUS-style fragility logic because real labeled post-earthquake solar failure data is rare.
