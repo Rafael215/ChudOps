@@ -131,7 +131,7 @@ export function ScenarioPanel({
         </div>
         <div>
           <p className="mb-1 font-mono text-[0.62rem] font-bold uppercase text-noc-teal">Ops Console</p>
-          <h1 className="font-sans text-xl font-extrabold leading-none text-white">SeismicSentry</h1>
+          <h1 className="font-sans text-xl font-extrabold leading-none text-white">Bedrock</h1>
         </div>
       </div>
 

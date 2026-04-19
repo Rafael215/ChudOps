@@ -38,7 +38,7 @@ export function TopHeader({ chaosState, latencyMs }: TopHeaderProps) {
           <RadioTower size={17} aria-hidden="true" />
         </div>
         <div>
-          <div className="font-sans text-[0.9rem] font-extrabold leading-none text-white">SeismicSentry</div>
+          <div className="font-sans text-[0.9rem] font-extrabold leading-none text-white">Bedrock</div>
           <div className="mt-1 text-[0.58rem] font-bold uppercase tracking-[0.18em] text-noc-muted">
             Resilient grid digital twin
           </div>
