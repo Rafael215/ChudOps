@@ -38,6 +38,24 @@ export const scenarioOpsMetadata: Record<string, ScenarioOpsMetadata> = {
     basinAmplification: "2.9x",
     modelSource: "Rekoske et al. 2023",
     envelope: [9, 31, 58, 88, 102, 77, 44]
+  },
+  "scripps-loh-map-1": {
+    faultName: "Scripps LOH simulation grid",
+    pgvRange: "0.18-1.83 cm/s",
+    faultMechanism: "Physics-based ground velocity map",
+    hypocenterDepth: "Unavailable in source artifact",
+    basinAmplification: "Vs30 joined per site",
+    modelSource: "Scripps SIO LOH PGV map",
+    envelope: [0.18, 0.42, 0.88, 1.19, 0.95, 0.62, 0.31]
+  },
+  "scripps-loh-map-1-stress": {
+    faultName: "Scripps LOH scaled stress test",
+    pgvRange: "8-82 cm/s",
+    faultMechanism: "Scaled PGV emergency drill",
+    hypocenterDepth: "Unavailable in source artifact",
+    basinAmplification: "45x PGV stress multiplier",
+    modelSource: "Scripps SIO LOH PGV map stress variant",
+    envelope: [8, 19, 40, 54, 82, 67, 31]
   }
 };
 

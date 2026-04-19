@@ -10,6 +10,7 @@ export interface SolarSite {
   capacityKw: number;
   installationType: InstallationType;
   vs30: number;
+  region?: string;
 }
 
 export interface EarthquakeScenario {
@@ -34,6 +35,29 @@ export interface SiteInferenceResult {
   riskBand: RiskBand;
   pgvCmS: number;
   expectedCapacityLostKw: number;
+  name?: string;
+  latitude?: number;
+  longitude?: number;
+  capacityKw?: number;
+  installationType?: InstallationType;
+  vs30?: number;
+  region?: string;
+  primaryDriver?: string;
+  secondaryDriver?: string;
+}
+
+export interface ModelFeatureImportance {
+  feature: string;
+  importance: number;
+}
+
+export interface ModelRunMetadata {
+  inferenceSource: "local" | "sagemaker";
+  modelName: string;
+  modelVersion: string;
+  aucRoc?: number;
+  featureImportance?: ModelFeatureImportance[];
+  syntheticLabelExplanation?: string;
 }
 
 export interface ScenarioRunResult {
@@ -46,6 +70,7 @@ export interface ScenarioRunResult {
   totalCapacityKw: number;
   expectedCapacityLostKw: number;
   inferenceLatencyMs: number;
+  model: ModelRunMetadata;
   results: SiteInferenceResult[];
 }
 

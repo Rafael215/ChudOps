@@ -18,6 +18,23 @@ const positionFor = (index: number) => ({
   top: `${18 + ((index * 23) % 58)}%`
 });
 
+const popupContentFor = (site: SolarSite, probabilityOfFailure: number) => {
+  const container = document.createElement("div");
+  container.className = "grid gap-1";
+
+  const title = document.createElement("strong");
+  title.textContent = site.name;
+
+  const capacity = document.createElement("span");
+  capacity.textContent = `${site.capacityKw.toLocaleString()} kW`;
+
+  const probability = document.createElement("span");
+  probability.textContent = `PoF ${Math.round(probabilityOfFailure * 100)}%`;
+
+  container.append(title, capacity, probability);
+  return container;
+};
+
 function MapLegends() {
   return (
     <div className="pointer-events-none absolute bottom-4 left-4 z-20 grid max-w-[280px] gap-3 border border-noc-border bg-[#080c11]/88 p-3 backdrop-blur">
@@ -99,11 +116,7 @@ export function GridMap({ sites, run }: GridMapProps) {
       element.style.setProperty("--marker-color", color);
       element.setAttribute("aria-label", `${site.name} ${result?.riskBand ?? "unknown"} risk`);
 
-      const popup = new mapboxgl.Popup({ offset: 18 }).setHTML(
-        `<strong>${site.name}</strong><span>${site.capacityKw.toLocaleString()} kW</span><span>PoF ${Math.round(
-          (result?.probabilityOfFailure ?? 0) * 100
-        )}%</span>`
-      );
+      const popup = new mapboxgl.Popup({ offset: 18 }).setDOMContent(popupContentFor(site, result?.probabilityOfFailure ?? 0));
 
       const marker = new mapboxgl.Marker({ element })
         .setLngLat([site.longitude, site.latitude])
@@ -112,6 +125,16 @@ export function GridMap({ sites, run }: GridMapProps) {
 
       markersRef.current.push(marker);
     });
+
+    if (sites.length > 0) {
+      const bounds = new mapboxgl.LngLatBounds();
+      sites.forEach((site) => bounds.extend([site.longitude, site.latitude]));
+      mapRef.current.fitBounds(bounds, {
+        padding: 64,
+        maxZoom: 9,
+        duration: 600
+      });
+    }
   }, [resultBySite, sites]);
 
   if (!import.meta.env.VITE_MAPBOX_TOKEN) {

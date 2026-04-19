@@ -23,7 +23,7 @@ export function ResultsTable({ sites, run }: ResultsTableProps) {
   const generatedAt = new Date(run.generatedAt).toLocaleTimeString();
 
   return (
-    <section className="border-t border-noc-border bg-noc-panel p-4" aria-label="Site inference results">
+    <section className="min-h-0 border-t border-noc-border bg-noc-panel p-4" aria-label="Site inference results">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="mb-1 inline-flex items-center gap-2 border border-noc-teal/35 bg-noc-teal/10 px-2 py-1 font-mono text-[0.62rem] font-bold uppercase text-noc-teal">
@@ -37,7 +37,7 @@ export function ResultsTable({ sites, run }: ResultsTableProps) {
           <span>Updated {secondsAgo}s ago</span>
         </div>
       </div>
-      <div className="overflow-x-auto border border-noc-border bg-[#080c11]">
+      <div className="max-h-[calc(100%-64px)] min-h-0 overflow-auto border border-noc-border bg-[#080c11]">
         <table className="w-full min-w-[980px] border-collapse font-mono text-[0.74rem]">
           <thead className="bg-[#060a0f]">
             <tr className="text-left uppercase text-noc-muted">
@@ -47,15 +47,19 @@ export function ResultsTable({ sites, run }: ResultsTableProps) {
               <th className="border-b border-noc-border px-3 py-3">PGV</th>
               <th className="border-b border-noc-border px-3 py-3">Capacity</th>
               <th className="border-b border-noc-border px-3 py-3">Vs30</th>
+              <th className="border-b border-noc-border px-3 py-3">Drivers</th>
               <th className="border-b border-noc-border px-3 py-3">Failover Impact</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((result) => {
               const site = siteById.get(result.siteId);
-              if (!site) return null;
+              const name = site?.name ?? result.name ?? result.siteId;
+              const installationType = site?.installationType ?? result.installationType ?? "rooftop";
+              const capacityKw = site?.capacityKw ?? result.capacityKw ?? 0;
+              const vs30 = site?.vs30 ?? result.vs30 ?? 0;
               const pof = Math.round(result.probabilityOfFailure * 100);
-              const soilLabel = site.vs30 < 260 ? "SOFT SEDIMENT" : site.vs30 < 420 ? "STIFF SOIL" : "ROCK";
+              const soilLabel = vs30 < 260 ? "SOFT SEDIMENT" : vs30 < 420 ? "STIFF SOIL" : "ROCK";
               const failoverImpact = Math.max(0.2, result.probabilityOfFailure * 6).toFixed(1);
               const barClass =
                 result.riskBand === "red"
@@ -72,8 +76,8 @@ export function ResultsTable({ sites, run }: ResultsTableProps) {
                   key={result.siteId}
                 >
                   <td className="px-3 py-3">
-                    <strong className="block font-sans text-sm font-bold text-noc-text">{site.name}</strong>
-                    <span className="font-sans text-xs uppercase text-noc-muted">{site.installationType.replace("_", " ")}</span>
+                    <strong className="block font-sans text-sm font-bold text-noc-text">{name}</strong>
+                    <span className="font-sans text-xs uppercase text-noc-muted">{installationType.replace("_", " ")}</span>
                   </td>
                   <td className="px-3 py-3">
                     <span className={`risk-pill ${result.riskBand}`}>{result.riskBand}</span>
@@ -85,10 +89,14 @@ export function ResultsTable({ sites, run }: ResultsTableProps) {
                     </span>
                   </td>
                   <td className="px-3 py-3 text-noc-text">{result.pgvCmS} cm/s</td>
-                  <td className="px-3 py-3 text-noc-text">{(site.capacityKw / 1000).toFixed(1)} MW</td>
+                  <td className="px-3 py-3 text-noc-text">{(capacityKw / 1000).toFixed(1)} MW</td>
                   <td className="px-3 py-3">
-                    <span className="text-noc-text">{site.vs30} m/s</span>
+                    <span className="text-noc-text">{vs30} m/s</span>
                     <span className="ml-2 text-[0.62rem] uppercase text-noc-muted">{soilLabel}</span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className="block text-noc-text">{result.primaryDriver ?? "PGV"}</span>
+                    <span className="text-[0.62rem] uppercase text-noc-muted">{result.secondaryDriver ?? soilLabel}</span>
                   </td>
                   <td className="px-3 py-3 text-noc-text">{failoverImpact} min</td>
                 </tr>

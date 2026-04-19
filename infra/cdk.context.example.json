@@ -2,8 +2,13 @@
   "environmentName": "dev",
   "enableSageMaker": "false",
   "alertEmail": "",
-  "allowedCorsOrigin": "*",
+  "allowedCorsOrigin": "https://d1zssbg0orn82l.cloudfront.net",
+  "demoAdminTokenSha256": "",
   "modelArtifactBucket": "",
   "modelArtifactKey": "models/seismic-sentry/model.tar.gz",
-  "sagemakerContainerImage": ""
+  "sagemakerContainerImage": "246618743249.dkr.ecr.us-west-2.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3",
+  "sagemakerInstanceType": "ml.t2.medium",
+  "modelVersion": "",
+  "modelAucRoc": "",
+  "modelFeatureImportance": ""
 }
