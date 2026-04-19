@@ -1,0 +1,2 @@
+scenario_id,name,magnitude,epicenter_latitude,epicenter_longitude,source,description
+scripps-loh-map-1,Scripps LOH PGV Map 1,0.0,35.7124,-114.415498,Scripps SIO physics-based LOH ground velocity simulation,Prototype seismic exposure scenario from Scripps LOH PGV map 1 with grid-center proxy coordinates and magnitude unavailable in source artifact.

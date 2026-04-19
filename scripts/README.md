@@ -1,9 +1,25 @@
 # Scripts
 
-This directory is reserved for dataset import and deployment helpers.
+This directory contains local dataset preparation helpers.
 
-Suggested next scripts:
+## Processed Data Handoff
 
-- `import-sites.ts`: load ZenPower permit records into DynamoDB.
-- `sample-pgv.ts`: sample Scripps PGV raster values by coordinate.
-- `package-model.sh`: train, archive, and upload `model.tar.gz` to S3.
+Generate the normalized CSV files expected by the backend ingestion contract:
+
+```bash
+source .venv/bin/activate
+python scripts/prepare_data.py --skip-raw-prep
+```
+
+Outputs:
+
+```text
+data/processed/sites.csv
+data/processed/scenarios.csv
+data/processed/scenario_features.csv
+```
+
+The generated `vs30` values are deterministic placeholders until a USGS Vs30
+layer is joined. The Scripps LOH artifact does not include a real geographic
+epicenter or magnitude, so the scenario CSV uses grid-center proxy coordinates
+and `0.0` for magnitude.
