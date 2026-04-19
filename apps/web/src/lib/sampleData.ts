@@ -77,6 +77,20 @@ export const sampleRun: ScenarioRunResult = {
   totalCapacityKw: 52500,
   expectedCapacityLostKw: 21725,
   inferenceLatencyMs: 1420,
+  model: {
+    inferenceSource: "local",
+    modelName: "Local HAZUS-style fallback",
+    modelVersion: "local-fallback-v1",
+    aucRoc: 0.0,
+    syntheticLabelExplanation:
+      "Training labels are synthetic. The trainer builds a HAZUS-like failure probability from PGV, Vs30, installation type, and capacity, then samples a binary failed label from that probability before fitting the model.",
+    featureImportance: [
+      { feature: "pgv_cm_s", importance: 0.55 },
+      { feature: "vs30", importance: 0.22 },
+      { feature: "installation_type_code", importance: 0.14 },
+      { feature: "capacity_kw", importance: 0.09 }
+    ]
+  },
   results: [
     { siteId: "zen-la-001", probabilityOfFailure: 0.82, riskBand: "red", pgvCmS: 61, expectedCapacityLostKw: 3444 },
     { siteId: "zen-la-002", probabilityOfFailure: 0.47, riskBand: "yellow", pgvCmS: 37, expectedCapacityLostKw: 4042 },

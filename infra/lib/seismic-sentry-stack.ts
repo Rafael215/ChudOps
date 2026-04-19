@@ -6,6 +6,7 @@ import * as appsync from "aws-cdk-lib/aws-appsync";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as fis from "aws-cdk-lib/aws-fis";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
@@ -26,9 +27,13 @@ export class SeismicSentryStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: SeismicSentryStackProps) {
     super(scope, id, props);
 
-    const allowedCorsOrigin = this.node.tryGetContext("allowedCorsOrigin") ?? "*";
+    const allowedCorsOrigin = this.node.tryGetContext("allowedCorsOrigin") ?? "https://d1zssbg0orn82l.cloudfront.net";
     const alertEmail = this.node.tryGetContext("alertEmail") ?? "";
     const enableSageMaker = this.node.tryGetContext("enableSageMaker") === "true";
+    const demoAdminTokenSha256 = this.node.tryGetContext("demoAdminTokenSha256") ?? "";
+    const modelAucRoc = this.node.tryGetContext("modelAucRoc") ?? "";
+    const modelFeatureImportance = this.node.tryGetContext("modelFeatureImportance") ?? "";
+    const modelVersion = this.node.tryGetContext("modelVersion") ?? "";
     const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
     const siteBucket = new s3.Bucket(this, "DashboardBucket", {
@@ -39,9 +44,45 @@ export class SeismicSentryStack extends cdk.Stack {
       autoDeleteObjects: true
     });
 
+    const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, "DashboardSecurityHeaders", {
+      securityHeadersBehavior: {
+        contentSecurityPolicy: {
+          contentSecurityPolicy:
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
+            "script-src 'self' blob:; worker-src blob:; child-src blob:; " +
+            "style-src 'self' 'unsafe-inline' https://api.mapbox.com; " +
+            "img-src 'self' data: blob: https://api.mapbox.com https://*.tiles.mapbox.com; " +
+            `connect-src 'self' https://*.execute-api.${this.region}.amazonaws.com https://api.mapbox.com https://events.mapbox.com https://*.tiles.mapbox.com ` +
+            `https://*.appsync-api.${this.region}.amazonaws.com wss://*.appsync-realtime-api.${this.region}.amazonaws.com; ` +
+            "font-src 'self' data:; form-action 'self';",
+          override: true
+        },
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
+        strictTransportSecurity: {
+          accessControlMaxAge: Duration.days(365),
+          includeSubdomains: true,
+          preload: true,
+          override: true
+        },
+        xssProtection: { protection: true, modeBlock: true, override: true }
+      },
+      customHeadersBehavior: {
+        customHeaders: [
+          {
+            header: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+            override: true
+          }
+        ]
+      }
+    });
+
     const distribution = new cloudfront.Distribution(this, "DashboardDistribution", {
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
+        responseHeadersPolicy,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
       },
       defaultRootObject: "index.html",
@@ -60,6 +101,12 @@ export class SeismicSentryStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: RemovalPolicy.DESTROY
     });
+    sitesTable.addGlobalSecondaryIndex({
+      indexName: "RegionIndex",
+      partitionKey: { name: "gsi1pk", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "gsi1sk", type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL
+    });
 
     const resultsTable = new dynamodb.Table(this, "ResultsTable", {
       partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
@@ -73,6 +120,14 @@ export class SeismicSentryStack extends cdk.Stack {
       displayName: `SeismicSentry ${props.environmentName} emergency alerts`
     });
 
+    const fisConfigBucket = new s3.Bucket(this, "FisConfigBucket", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true
+    });
+
     if (alertEmail) {
       alertTopic.addSubscription(new subscriptions.EmailSubscription(alertEmail));
     }
@@ -81,13 +136,19 @@ export class SeismicSentryStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
       managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")]
     });
+    const sageMakerEndpointArn = cdk.Stack.of(this).formatArn({
+      service: "sagemaker",
+      resource: "endpoint",
+      resourceName: `${id.toLowerCase()}-endpoint`
+    });
     resultsTable.grantReadWriteData(apiRole);
     sitesTable.grantReadWriteData(apiRole);
     alertTopic.grantPublish(apiRole);
+    fisConfigBucket.grantReadWrite(apiRole);
     apiRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ["sagemaker:InvokeEndpoint"],
-        resources: ["*"]
+        resources: [sageMakerEndpointArn]
       })
     );
 
@@ -98,8 +159,23 @@ export class SeismicSentryStack extends cdk.Stack {
       ALERT_TOPIC_ARN: alertTopic.topicArn,
       SAGEMAKER_ENDPOINT_NAME: `${id.toLowerCase()}-endpoint`,
       STACK_NAME: id,
-      USE_LOCAL_INFERENCE: "true"
+      USE_LOCAL_INFERENCE: enableSageMaker ? "false" : "true",
+      RESPONSE_RESULT_LIMIT: "1000",
+      REGION_INDEX_NAME: "RegionIndex",
+      MODEL_NAME: "SeismicSentry GBT Failure Model",
+      MODEL_VERSION: modelVersion || `${id.toLowerCase()}-endpoint`,
+      MODEL_AUC_ROC: modelAucRoc,
+      MODEL_FEATURE_IMPORTANCE: modelFeatureImportance,
+      SAGEMAKER_BATCH_SIZE: "5000",
+      DEMO_ADMIN_TOKEN_SHA256: demoAdminTokenSha256,
+      AWS_FIS_CONFIGURATION_LOCATION: `arn:aws:s3:::${fisConfigBucket.bucketName}/awsfis`
     };
+
+    const fisLambdaExtensionLayer = lambda.LayerVersion.fromLayerVersionArn(
+      this,
+      "FisLambdaExtensionLayer",
+      `arn:aws:lambda:${cdk.Stack.of(this).region}:975050054544:layer:aws-fis-extension-x86_64:287`
+    );
 
     const health = new nodejs.NodejsFunction(this, "HealthFunction", {
       runtime: lambda.Runtime.NODEJS_20_X,
@@ -134,12 +210,13 @@ export class SeismicSentryStack extends cdk.Stack {
       handler: "handler",
       entry: path.join(repoRoot, "services/api/src/orchestrator.ts"),
       role: apiRole,
-      timeout: Duration.seconds(20),
+      timeout: Duration.seconds(30),
       memorySize: 1024,
       bundling: {
         sourceMap: true,
         target: "node20"
       },
+      layers: [fisLambdaExtensionLayer],
       environment: commonEnvironment
     });
 
@@ -157,14 +234,107 @@ export class SeismicSentryStack extends cdk.Stack {
       environment: commonEnvironment
     });
 
+    const fisRole = new iam.Role(this, "FisExperimentRole", {
+      assumedBy: new iam.ServicePrincipal("fis.amazonaws.com")
+    });
+    fisConfigBucket.grantReadWrite(fisRole);
+    fisRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "lambda:GetFunction",
+          "lambda:GetFunctionConfiguration",
+          "lambda:ListAliases",
+          "lambda:ListVersionsByFunction",
+          "lambda:GetAlias",
+          "lambda:PutFunctionConcurrency",
+          "lambda:DeleteFunctionConcurrency"
+        ],
+        resources: [orchestrator.functionArn, `${orchestrator.functionArn}:*`]
+      })
+    );
+
+    const fisExperimentTemplate = new fis.CfnExperimentTemplate(this, "FisExperimentTemplate", {
+      description: `SeismicSentry ${props.environmentName} primary-region degradation experiment`,
+      roleArn: fisRole.roleArn,
+      stopConditions: [{ source: "none" }],
+      targets: {
+        ApiLambda: {
+          resourceType: "aws:lambda:function",
+          resourceArns: [orchestrator.functionArn],
+          selectionMode: "ALL"
+        }
+      },
+      actions: {
+        ThrottleLambdaConcurrency: {
+          actionId: "aws:lambda:invocation-add-delay",
+          description: "Simulate primary API degradation during earthquake response",
+          parameters: {
+            duration: "PT2M",
+            invocationPercentage: "100",
+            startupDelayMilliseconds: "1500"
+          },
+          targets: {
+            Functions: "ApiLambda"
+          }
+        }
+      },
+      tags: {
+        Project: "SeismicSentry",
+        Purpose: "Hackathon resilience demo"
+      }
+    });
+
+    const fisExperimentTemplateArn = cdk.Stack.of(this).formatArn({
+      service: "fis",
+      resource: "experiment-template",
+      resourceName: "*"
+    });
+    const fisExperimentArn = cdk.Stack.of(this).formatArn({
+      service: "fis",
+      resource: "experiment",
+      resourceName: "*"
+    });
+
+    apiRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["fis:StartExperiment"],
+        resources: [fisExperimentTemplateArn, fisExperimentArn]
+      })
+    );
+    apiRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["fis:GetExperiment", "fis:StopExperiment"],
+        resources: [fisExperimentArn]
+      })
+    );
+
+    const fisEnvironment = {
+      ...commonEnvironment,
+      FIS_EXPERIMENT_TEMPLATE_ID: fisExperimentTemplate.attrId
+    };
+
+    const fisExperiment = new nodejs.NodejsFunction(this, "FisExperimentFunction", {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "handler",
+      entry: path.join(repoRoot, "services/api/src/fis.ts"),
+      role: apiRole,
+      timeout: Duration.seconds(15),
+      memorySize: 512,
+      bundling: {
+        sourceMap: true,
+        target: "node20"
+      },
+      environment: fisEnvironment
+    });
+
     const httpApi = new apigatewayv2.HttpApi(this, "HttpApi", {
       corsPreflight: {
-        allowHeaders: ["content-type", "authorization"],
         allowMethods: [
           apigatewayv2.CorsHttpMethod.GET,
           apigatewayv2.CorsHttpMethod.POST,
           apigatewayv2.CorsHttpMethod.OPTIONS
         ],
+        allowHeaders: ["content-type", "authorization", "x-demo-admin-token"],
         allowOrigins: [allowedCorsOrigin]
       }
     });
@@ -199,6 +369,18 @@ export class SeismicSentryStack extends cdk.Stack {
       integration: new integrations.HttpLambdaIntegration("ReportIntegration", report)
     });
 
+    httpApi.addRoutes({
+      path: "/fis/experiments",
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: new integrations.HttpLambdaIntegration("FisExperimentIntegration", fisExperiment)
+    });
+
+    httpApi.addRoutes({
+      path: "/fis/experiments/{experimentId}",
+      methods: [apigatewayv2.HttpMethod.GET],
+      integration: new integrations.HttpLambdaIntegration("FisExperimentStatusIntegration", fisExperiment)
+    });
+
     const graphqlApi = new appsync.GraphqlApi(this, "RealtimeApi", {
       name: `seismic-sentry-${props.environmentName}`,
       definition: appsync.Definition.fromFile("schema/schema.graphql"),
@@ -220,14 +402,15 @@ export class SeismicSentryStack extends cdk.Stack {
       requestMappingTemplate: appsync.MappingTemplate.fromString("{\"version\":\"2018-05-29\",\"payload\":$util.toJson($context.arguments.input)}"),
       responseMappingTemplate: appsync.MappingTemplate.fromString("$util.toJson($context.result)")
     });
-
-    const fisRole = new iam.Role(this, "FisExperimentRole", {
-      assumedBy: new iam.ServicePrincipal("fis.amazonaws.com")
-    });
-    fisRole.addToPolicy(
+    apiRole.addToPolicy(
       new iam.PolicyStatement({
-        actions: ["lambda:PutFunctionConcurrency", "lambda:DeleteFunctionConcurrency", "dynamodb:UpdateTable"],
-        resources: ["*"]
+        actions: ["iam:CreateServiceLinkedRole"],
+        resources: ["*"],
+        conditions: {
+          StringLike: {
+            "iam:AWSServiceName": "fis.amazonaws.com"
+          }
+        }
       })
     );
 
@@ -264,22 +447,47 @@ export class SeismicSentryStack extends cdk.Stack {
   private createOptionalSageMakerEndpoint(id: string) {
     const modelArtifactBucket = this.node.tryGetContext("modelArtifactBucket");
     const modelArtifactKey = this.node.tryGetContext("modelArtifactKey");
-    const containerImage = this.node.tryGetContext("sagemakerContainerImage");
+    const containerImage =
+      this.node.tryGetContext("sagemakerContainerImage") ??
+      "246618743249.dkr.ecr.us-west-2.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3";
+    const endpointInstanceType = this.node.tryGetContext("sagemakerInstanceType") ?? "ml.t2.medium";
 
-    if (!modelArtifactBucket || !modelArtifactKey || !containerImage) {
-      throw new Error("enableSageMaker=true requires modelArtifactBucket, modelArtifactKey, and sagemakerContainerImage context values.");
+    if (!modelArtifactBucket || !modelArtifactKey) {
+      throw new Error("enableSageMaker=true requires modelArtifactBucket and modelArtifactKey context values.");
     }
 
     const role = new iam.Role(this, "SageMakerExecutionRole", {
-      assumedBy: new iam.ServicePrincipal("sagemaker.amazonaws.com"),
-      managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSageMakerFullAccess")]
+      assumedBy: new iam.ServicePrincipal("sagemaker.amazonaws.com")
     });
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:GetObject"],
+        resources: [`arn:aws:s3:::${modelArtifactBucket}/${modelArtifactKey}`]
+      })
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:ListBucket"],
+        resources: [`arn:aws:s3:::${modelArtifactBucket}`],
+        conditions: {
+          StringLike: {
+            "s3:prefix": [modelArtifactKey, modelArtifactKey.replace(/\/[^/]+$/, "/*")]
+          }
+        }
+      })
+    );
 
     const model = new sagemaker.CfnModel(this, "FailureModel", {
       executionRoleArn: role.roleArn,
       primaryContainer: {
         image: containerImage,
-        modelDataUrl: `s3://${modelArtifactBucket}/${modelArtifactKey}`
+        modelDataUrl: `s3://${modelArtifactBucket}/${modelArtifactKey}`,
+        environment: {
+          SAGEMAKER_PROGRAM: "inference.py",
+          SAGEMAKER_SUBMIT_DIRECTORY: "/opt/ml/model/code",
+          SAGEMAKER_CONTAINER_LOG_LEVEL: "20",
+          SAGEMAKER_REGION: this.region
+        }
       }
     });
 
@@ -288,7 +496,7 @@ export class SeismicSentryStack extends cdk.Stack {
         {
           initialInstanceCount: 1,
           initialVariantWeight: 1,
-          instanceType: "ml.t2.medium",
+          instanceType: endpointInstanceType,
           modelName: model.attrModelName,
           variantName: "primary"
         }

@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ChevronDown,
   Cpu,
+  BrainCircuit,
   Gauge,
   Layers3,
   RadioTower,
@@ -13,20 +14,31 @@ import {
 import { Line, LineChart, ResponsiveContainer } from "recharts";
 import type { EarthquakeScenario, ScenarioRunResult } from "@seismic-sentry/shared";
 import { getScenarioOpsMetadata } from "../lib/opsMetadata";
+import { visualizationScopes } from "../lib/visualizationScopes";
 
 interface ScenarioPanelProps {
   scenarios: EarthquakeScenario[];
   activeScenarioId: string;
+  activeScopeId: string;
   run: ScenarioRunResult;
   isRunning: boolean;
+  isChaosStarting: boolean;
   chaosState: "idle" | "running" | "complete";
   onSelectScenario: (scenarioId: string) => void;
+  onSelectScope: (scopeId: string) => void;
   onRunScenario: () => void;
   onTriggerChaos: () => void;
+  onOpenModelDetails: () => void;
 }
 
 const formatMw = (magnitude: number) => `M${magnitude.toFixed(1)}`;
-const loadingStates = ["Loading PGV grid...", "Running inference...", "Scoring 847 assets...", "Complete"];
+const featureLabel = (feature: string) =>
+  ({
+    pgv_cm_s: "PGV",
+    vs30: "Vs30",
+    installation_type_code: "Install Type",
+    capacity_kw: "Capacity"
+  })[feature] ?? feature;
 
 const MetricRow = ({
   icon: Icon,
@@ -61,12 +73,16 @@ const MetricRow = ({
 export function ScenarioPanel({
   scenarios,
   activeScenarioId,
+  activeScopeId,
   run,
   isRunning,
+  isChaosStarting,
   chaosState,
   onSelectScenario,
+  onSelectScope,
   onRunScenario,
-  onTriggerChaos
+  onTriggerChaos,
+  onOpenModelDetails
 }: ScenarioPanelProps) {
   const activeScenario = scenarios.find((scenario) => scenario.id === activeScenarioId) ?? scenarios[0]!;
   const lostMw = run.expectedCapacityLostKw / 1000;
@@ -74,6 +90,12 @@ export function ScenarioPanel({
   const activeMetadata = getScenarioOpsMetadata(activeScenario);
   const [paramsOpen, setParamsOpen] = useState(true);
   const [loadingStep, setLoadingStep] = useState(0);
+  const loadingStates = [
+    "Loading PGV grid...",
+    "Running inference...",
+    `Scoring ${run.totalSites.toLocaleString()} assets...`,
+    "Complete"
+  ];
 
   useEffect(() => {
     if (!isRunning) {
@@ -102,7 +124,7 @@ export function ScenarioPanel({
   );
 
   return (
-    <aside className="flex min-h-full flex-col gap-5 border-r border-noc-border bg-noc-panel p-4 xl:p-5" aria-label="Scenario controls">
+    <aside className="flex max-h-none min-h-full flex-col gap-5 overflow-visible border-r border-noc-border bg-noc-panel p-4 xl:sticky xl:top-12 xl:max-h-[calc(100vh-48px)] xl:overflow-y-auto xl:p-5" aria-label="Scenario controls">
       <div className="flex items-center gap-3 border border-noc-border bg-[#0a0e14]/80 p-3">
         <div className="grid h-11 w-11 place-items-center border border-noc-teal/50 bg-noc-teal/10 text-noc-teal shadow-teal-glow">
           <RadioTower size={22} aria-hidden="true" />
@@ -164,6 +186,136 @@ export function ScenarioPanel({
         </div>
       </section>
 
+      <section className="border border-noc-border bg-[#0a0e14] p-3" aria-label="Visualization scope">
+        <label className="mb-2 block font-mono text-xs font-bold uppercase text-noc-text" htmlFor="scope-filter">
+          Visualization Scope
+        </label>
+        <select
+          className="h-10 w-full border border-noc-border bg-black px-3 font-mono text-xs uppercase text-noc-text outline-none transition focus:border-noc-teal"
+          id="scope-filter"
+          onChange={(event) => onSelectScope(event.target.value)}
+          value={activeScopeId}
+        >
+          {visualizationScopes.map((scope) => (
+            <option key={scope.id} value={scope.id}>
+              {scope.label}
+            </option>
+          ))}
+        </select>
+        <p className="mt-2 font-mono text-[0.62rem] uppercase text-noc-muted">
+          Defaults to LA County and San Diego County so the dashboard only hydrates the visible demo footprint.
+        </p>
+      </section>
+
+      <section className="border border-noc-border bg-[#0a0e14] p-3" aria-label="Telemetry">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-mono text-xs font-bold uppercase text-noc-text">Telemetry</h2>
+          <span
+            className={`border px-2 py-0.5 font-mono text-[0.62rem] ${
+              run.model.inferenceSource === "sagemaker"
+                ? "border-noc-teal/50 bg-noc-teal/10 text-noc-teal"
+                : "border-noc-amber/50 bg-noc-amber/10 text-noc-amber"
+            }`}
+          >
+            {run.model.inferenceSource === "sagemaker" ? "SAGEMAKER XGBOOST" : "LOCAL FALLBACK"}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+          <MetricRow icon={Activity} label="Inference" value={(run.inferenceLatencyMs / 1000).toFixed(1)} unit="s" />
+          <MetricRow icon={AlertTriangle} label="Critical Sites" tone="red" value={String(run.redSites)} />
+          <MetricRow icon={Zap} label="Expected Loss" tone="amber" value={lostMw.toFixed(1)} unit="MW" />
+          <MetricRow icon={ShieldCheck} label="Failover Target" value="<90" unit="s" />
+          <MetricRow icon={Cpu} label="Assets Scored" value={String(run.totalSites)} />
+          <MetricRow icon={Gauge} label="Loss Ratio" tone="amber" value={String(lossPercent)} unit="%" />
+        </div>
+        <div className="mt-3">
+          <div className="mb-1 flex justify-between font-mono text-[0.62rem] uppercase text-noc-muted">
+            <span>Expected Loss</span>
+            <span>{lossPercent}% regional capacity</span>
+          </div>
+          <div className="h-1.5 overflow-hidden bg-noc-border">
+            <div className="h-full bg-gradient-to-r from-noc-teal via-noc-amber to-noc-red transition-all" style={{ width: `${lossPercent}%` }} />
+          </div>
+        </div>
+      </section>
+
+      <section className="border border-noc-border bg-[#0a0e14] p-3" aria-label="Model evidence">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-mono text-xs font-bold uppercase text-noc-text">Model Evidence</h2>
+          <BrainCircuit size={16} className="text-noc-teal" aria-hidden="true" />
+        </div>
+        <div className="grid gap-2 font-mono text-[0.66rem]">
+          <div className="flex justify-between gap-3 border-b border-noc-border/70 pb-2">
+            <span className="font-sans uppercase text-noc-muted">Model</span>
+            <strong className="text-right text-noc-text">{run.model.modelName}</strong>
+          </div>
+          <div className="flex justify-between gap-3 border-b border-noc-border/70 pb-2">
+            <span className="font-sans uppercase text-noc-muted">Version</span>
+            <strong className="max-w-[160px] truncate text-right text-noc-text">{run.model.modelVersion}</strong>
+          </div>
+          <div className="flex justify-between gap-3 border-b border-noc-border/70 pb-2">
+            <span className="font-sans uppercase text-noc-muted">AUC-ROC</span>
+            <strong className="text-right text-noc-teal">{run.model.aucRoc ? run.model.aucRoc.toFixed(3) : "n/a"}</strong>
+          </div>
+          {(run.model.featureImportance ?? []).slice(0, 4).map((item) => (
+            <div className="grid grid-cols-[88px_1fr_42px] items-center gap-2" key={item.feature}>
+              <span className="truncate font-sans uppercase text-noc-muted">{featureLabel(item.feature)}</span>
+              <span className="h-1.5 bg-noc-border">
+                <span className="block h-full bg-noc-teal" style={{ width: `${Math.max(4, Math.round(item.importance * 100))}%` }} />
+              </span>
+              <strong className="text-right text-noc-text">{Math.round(item.importance * 100)}%</strong>
+            </div>
+          ))}
+        </div>
+        <button
+          className="mt-3 flex h-10 w-full items-center justify-center gap-2 border border-noc-teal/50 bg-noc-teal/10 font-mono text-[0.68rem] font-bold uppercase text-noc-teal transition hover:bg-noc-teal/15"
+          onClick={onOpenModelDetails}
+          type="button"
+        >
+          <BrainCircuit size={15} aria-hidden="true" />
+          Open Model Details
+        </button>
+      </section>
+
+      <div className="grid gap-2 border border-noc-border bg-[#0a0e14] p-3">
+        <button
+          className="relative min-h-12 overflow-hidden border border-noc-teal bg-noc-teal/95 px-4 font-sans text-sm font-extrabold uppercase text-[#03110e] shadow-teal-glow disabled:cursor-progress disabled:opacity-90"
+          disabled={isRunning}
+          onClick={onRunScenario}
+          type="button"
+        >
+          <span className="relative z-10 inline-flex items-center justify-center gap-2">
+            <Activity size={18} aria-hidden="true" />
+            {isRunning ? loadingStates[loadingStep] : "Run Scenario"}
+          </span>
+          {isRunning ? (
+            <span
+              className="absolute bottom-0 left-0 h-1 bg-white/80 transition-all duration-300"
+              style={{ width: `${loadingProgress}%` }}
+            />
+          ) : null}
+        </button>
+
+        <button
+          className="group relative min-h-12 border border-noc-amber/70 bg-noc-amber/12 px-4 font-sans text-sm font-bold uppercase text-noc-amber shadow-amber-glow"
+          disabled={isChaosStarting || chaosState === "running"}
+          onClick={onTriggerChaos}
+          type="button"
+        >
+          <span className="inline-flex items-center justify-center gap-2">
+            <AlertTriangle size={18} aria-hidden="true" />
+            {isChaosStarting ? "Launching FIS..." : chaosState === "running" ? "Chaos Active" : "Trigger Chaos Test"}
+          </span>
+          <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 z-10 hidden w-full border border-noc-border bg-black px-3 py-2 text-left font-mono text-[0.65rem] normal-case text-noc-muted group-hover:block">
+            Injects fault via AWS FIS. Will trigger Route 53 ARC failover.
+          </span>
+        </button>
+        <p className="font-mono text-[0.62rem] uppercase text-noc-muted">
+          <Layers3 size={12} className="mr-1 inline text-noc-teal" aria-hidden="true" />
+          {activeScenario.description}
+        </p>
+      </div>
+
       <section className="border border-noc-border bg-[#0a0e14] p-3" aria-label="Simulation parameters">
         <button
           className="flex w-full items-center justify-between font-mono text-xs font-bold uppercase text-noc-text"
@@ -189,68 +341,6 @@ export function ScenarioPanel({
           </div>
         ) : null}
       </section>
-
-      <section className="border border-noc-border bg-[#0a0e14] p-3" aria-label="Telemetry">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-mono text-xs font-bold uppercase text-noc-text">Telemetry</h2>
-          <span className="font-mono text-[0.62rem] text-noc-teal">LIVE</span>
-        </div>
-        <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-          <MetricRow icon={Activity} label="Inference" value={(run.inferenceLatencyMs / 1000).toFixed(1)} unit="s" />
-          <MetricRow icon={AlertTriangle} label="Critical Sites" tone="red" value={String(run.redSites)} />
-          <MetricRow icon={Zap} label="Expected Loss" tone="amber" value={lostMw.toFixed(1)} unit="MW" />
-          <MetricRow icon={ShieldCheck} label="Failover Target" value="<90" unit="s" />
-          <MetricRow icon={Cpu} label="Assets Scored" value={String(run.totalSites)} />
-          <MetricRow icon={Gauge} label="Loss Ratio" tone="amber" value={String(lossPercent)} unit="%" />
-        </div>
-        <div className="mt-3">
-          <div className="mb-1 flex justify-between font-mono text-[0.62rem] uppercase text-noc-muted">
-            <span>Expected Loss</span>
-            <span>{lossPercent}% regional capacity</span>
-          </div>
-          <div className="h-1.5 overflow-hidden bg-noc-border">
-            <div className="h-full bg-gradient-to-r from-noc-teal via-noc-amber to-noc-red transition-all" style={{ width: `${lossPercent}%` }} />
-          </div>
-        </div>
-      </section>
-
-      <div className="mt-auto grid gap-2">
-        <button
-          className="relative min-h-12 overflow-hidden border border-noc-teal bg-noc-teal/95 px-4 font-sans text-sm font-extrabold uppercase text-[#03110e] shadow-teal-glow disabled:cursor-progress disabled:opacity-90"
-          disabled={isRunning}
-          onClick={onRunScenario}
-          type="button"
-        >
-          <span className="relative z-10 inline-flex items-center justify-center gap-2">
-            <Activity size={18} aria-hidden="true" />
-            {isRunning ? loadingStates[loadingStep] : "Run Scenario"}
-          </span>
-          {isRunning ? (
-            <span
-              className="absolute bottom-0 left-0 h-1 bg-white/80 transition-all duration-300"
-              style={{ width: `${loadingProgress}%` }}
-            />
-          ) : null}
-        </button>
-
-        <button
-          className="group relative min-h-12 border border-noc-amber/70 bg-noc-amber/12 px-4 font-sans text-sm font-bold uppercase text-noc-amber shadow-amber-glow"
-          onClick={onTriggerChaos}
-          type="button"
-        >
-          <span className="inline-flex items-center justify-center gap-2">
-            <AlertTriangle size={18} aria-hidden="true" />
-            {chaosState === "running" ? "Chaos Active" : "Trigger Chaos Test"}
-          </span>
-          <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 z-10 hidden w-full border border-noc-border bg-black px-3 py-2 text-left font-mono text-[0.65rem] normal-case text-noc-muted group-hover:block">
-            Injects fault via AWS FIS. Will trigger Route 53 ARC failover.
-          </span>
-        </button>
-        <p className="font-mono text-[0.62rem] uppercase text-noc-muted">
-          <Layers3 size={12} className="mr-1 inline text-noc-teal" aria-hidden="true" />
-          {activeScenario.description}
-        </p>
-      </div>
     </aside>
   );
 }

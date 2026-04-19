@@ -1,5 +1,5 @@
 {
-  "description": "SeismicSentry hackathon chaos template placeholder",
+  "description": "Reference shape for the SeismicSentry FIS experiment template provisioned by CDK",
   "targets": {
     "ApiLambda": {
       "resourceType": "aws:lambda:function",
@@ -9,10 +9,12 @@
   },
   "actions": {
     "ThrottleLambdaConcurrency": {
-      "actionId": "aws:lambda:invocation-pause",
+      "actionId": "aws:lambda:invocation-add-delay",
       "description": "Simulate primary API degradation during earthquake response",
       "parameters": {
-        "duration": "PT2M"
+        "duration": "PT2M",
+        "invocationPercentage": "100",
+        "startupDelayMilliseconds": "1500"
       },
       "targets": {
         "Functions": "ApiLambda"

@@ -7,14 +7,17 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "import:fixtures": "node dist/import-fixtures.js"
+    "import:fixtures": "node dist/import-fixtures.js",
+    "import:processed": "FIXTURE_DIR=../../data/processed node dist/import-fixtures.js"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.699.0",
+    "@aws-sdk/client-fis": "^3.699.0",
     "@aws-sdk/client-sagemaker-runtime": "^3.699.0",
     "@aws-sdk/client-sns": "^3.699.0",
     "@aws-sdk/lib-dynamodb": "^3.699.0",
-    "@seismic-sentry/shared": "0.1.0"
+    "@seismic-sentry/shared": "0.1.0",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.146",

@@ -120,6 +120,8 @@ Site row:
 ```text
 pk = SITE#<site_id>
 sk = METADATA
+gsi1pk = SITE_REGION#<region>
+gsi1sk = SITE#<site_id>
 ```
 
 Scenario row:
@@ -134,7 +136,24 @@ Scenario feature row:
 ```text
 pk = SCENARIO#<scenario_id>
 sk = FEATURE#<site_id>
+gsi1pk = SCENARIO_REGION#<scenario_id>#<region>
+gsi1sk = FEATURE#<site_id>
 ```
+
+The importer derives `region` from site latitude/longitude. Current region buckets are:
+
+```text
+southern-california
+northern-california
+california
+western-us
+central-us
+southeast-us
+northeast-us
+outside-us
+```
+
+The deployed table has a `RegionIndex` GSI on `gsi1pk, gsi1sk` so the API can query a site catalog or scenario features by region instead of scanning.
 
 ## Current Fixtures
 
@@ -155,6 +174,27 @@ npm run build
 SITES_TABLE_NAME=<deployed-sites-table-name> AWS_PROFILE=seismic-sentry AWS_REGION=us-west-2 npm run import:fixtures
 ```
 
+For the real processed EDA outputs in `data/processed`, use:
+
+```bash
+SITES_TABLE_NAME=<deployed-sites-table-name> REPLACE_TABLE_DATA=true AWS_PROFILE=seismic-sentry AWS_REGION=us-west-2 npm run import:processed -w @seismic-sentry/api
+```
+
+`REPLACE_TABLE_DATA=true` removes prior `SITE#...` and `SCENARIO#...` rows before loading the processed files. The importer denormalizes site metadata into each `SCENARIO#... / FEATURE#...` row so scenario inference can query one DynamoDB partition and score all assets without extra site lookups.
+
+By default, the importer also creates a scaled demo scenario for every processed scenario:
+
+```text
+<scenario_id>-stress
+```
+
+The stress scenario multiplies PGV by `45x` so the dashboard can demonstrate yellow/red risk bands during a hackathon demo while keeping the original scenario intact. Override with:
+
+```bash
+ENABLE_STRESS_SCENARIOS=false
+STRESS_PGV_MULTIPLIER=30
+```
+
 The current deployed sites table is:
 
 ```text
@@ -164,8 +204,16 @@ SeismicSentry-dev-SitesTable456CECCC-14QOQHWDBJMYQ
 So the current command is:
 
 ```bash
-SITES_TABLE_NAME=SeismicSentry-dev-SitesTable456CECCC-14QOQHWDBJMYQ AWS_PROFILE=seismic-sentry AWS_REGION=us-west-2 npm run import:fixtures
+SITES_TABLE_NAME=SeismicSentry-dev-SitesTable456CECCC-14QOQHWDBJMYQ REPLACE_TABLE_DATA=true AWS_PROFILE=seismic-sentry AWS_REGION=us-west-2 npm run import:processed -w @seismic-sentry/api
 ```
+
+## API Behavior With Real Data
+
+- `GET /scenarios` returns scenario metadata from DynamoDB.
+- `GET /sites?limit=2000` returns a bounded site catalog for map rendering.
+- `GET /sites?limit=2000&region=southern-california` uses the `RegionIndex`.
+- `POST /scenarios/{scenarioId}/run` scores every scenario feature row in DynamoDB, calculates summary metrics across the full dataset, and returns the top-risk result slice to keep API Gateway and the browser responsive.
+- `POST /scenarios/{scenarioId}/run?region=southern-california` scores only that region through the `RegionIndex`.
 
 ## Teammate Summary
 
